@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>会员管理</title>
+<style>
+  body { font-family: Arial; margin: 0; padding: 0; background: #f5f5f5; }
+  header { background: #1890ff; color: white; padding: 15px; font-size: 20px; }
+  nav { width: 200px; background: #001529; color: white; min-height: 100vh; float: left; }
+  nav ul { list-style: none; padding: 0; }
+  nav ul li { padding: 15px; cursor: pointer; color: white; }
+  nav ul li:hover, nav ul li.active { background: #1890ff; }
+  main { margin-left: 200px; padding: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  table, th, td { border: 1px solid #ccc; }
+  th, td { padding: 10px; text-align: left; }
+  button { padding: 5px 10px; margin: 2px; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>后台管理系统 - 会员管理</header>
+<nav>
+  <ul>
+    <li onclick="navigate('dashboard.html')">后台主页</li>
+    <li class="active">会员管理</li>
+    <li onclick="navigate('events.html')">活动管理</li>
+    <li onclick="logout()">退出登录</li>
+  </ul>
+</nav>
+<main>
+  <h2>会员列表</h2>
+  <table id="membersTable">
+    <thead>
+      <tr><th>头像</th><th>姓名</th><th>邮箱</th><th>操作</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- 编辑弹窗 -->
+  <div id="editModal" style="
+    display:none;
+    position:fixed;
+    top:50%; left:50%;
+    transform:translate(-50%, -50%);
+    background:white;
+    padding:20px;
+    box-shadow:0 0 10px rgba(0,0,0,0.3);
+    border-radius:10px;
+    width:400px;
+    z-index:1000;">
+    <h3>编辑会员资料</h3>
+    <label>头像：</label><br>
+    <input type="file" id="avatarInput" accept="image/*"><br><br>
+    <img id="avatarPreview" src="" alt="预览头像" style="width:80px;height:80px;border-radius:50%;object-fit:cover;"><br><br>
+    <label>姓名：</label><br>
+    <input type="text" id="editName" style="width:100%;padding:5px;"><br><br>
+    <label>邮箱：</label><br>
+    <input type="email" id="editEmail" style="width:100%;padding:5px;"><br><br>
+    <label>密码：</label><br>
+    <input type="password" id="editPassword" style="width:100%;padding:5px;"><br><br>
+
+    <div style="text-align:right;">
+      <button onclick="saveEdit()">保存</button>
+      <button onclick="closeModal()">取消</button>
+    </div>
+  </div>
+
+  <!-- 遮罩层 -->
+  <div id="overlay" style="
+    display:none;
+    position:fixed;
+    top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,0.3);
+    z-index:999;">
+  </div>
+</main>
+
+<script>
+// 登录验证
+if (localStorage.getItem('loggedIn') !== 'true') {
+  window.location.href = 'login.html';
+}
+
+let members = [];
+let editIndex = null;
+
+// 获取会员数据
+async function fetchMembers() {
+  try {
+    const res = await fetch('http://47.113.100.224:5000/api/users');
+    const result = await res.json();
+    if (result.status === 'success') {
+      members = result.data.map(m => ({
+        ...m,
+        avatar: m.avatar && m.avatar.trim() !== '' ? m.avatar : null
+      }));
+      renderMembers();
+    } else {
+      alert('获取会员信息失败');
+    }
+  } catch (error) {
+    console.error(error);
+    alert('网络错误');
+  }
+}
+
+function renderMembers() {
+  const tbody = document.querySelector('#membersTable tbody');
+  tbody.innerHTML = '';
+  members.forEach((m, index) => {
+    const avatarHTML = m.avatar
+      ? `<img src="${m.avatar}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;">`
+      : `<div style="width:50px;height:50px;border-radius:50%;background:black;"></div>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${avatarHTML}</td>
+      <td>${m.name}</td>
+      <td>${m.email}</td>
+      <td>
+        <button onclick="editMember(${index})">编辑</button>
+        <button onclick="deleteMember(${index})">删除</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// 打开编辑弹窗
+function editMember(index) {
+  editIndex = index;
+  const m = members[index];
+  document.getElementById('editName').value = m.name;
+  document.getElementById('editEmail').value = m.email;
+  document.getElementById('editPassword').value = '';
+  document.getElementById('avatarPreview').src = m.avatar || '';
+  document.getElementById('avatarPreview').style.background = m.avatar ? 'none' : 'black';
+
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('editModal').style.display = 'block';
+}
+
+// 保存修改（调用后端 API）
+async function saveEdit() {
+  const name = document.getElementById('editName').value;
+  const email = document.getElementById('editEmail').value;
+  const password = document.getElementById('editPassword').value;
+  const avatarSrc = document.getElementById('avatarPreview').src;
+
+  if (!name || !email) {
+    alert('姓名和邮箱不能为空');
+    return;
+  }
+
+  const member = members[editIndex];
+  const payload = {
+    user_id: member.user_id,
+    name: name,
+    email: email
+  };
+
+  if (password) payload.password = password;
+
+  // 如果头像是 Base64 图片，提取数据和 MIME 类型
+  if (avatarSrc && avatarSrc.startsWith('data:image/')) {
+    const base64Data = avatarSrc.split(',')[1];
+    const mimeType = avatarSrc.substring(5, avatarSrc.indexOf(';'));
+    payload.profile_photo_data = base64Data;
+    payload.profile_photo_mimetype = mimeType;
+  }
+
+  try {
+    const res = await fetch('http://47.113.100.224:5000/update_user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if (result.code === 200) {
+      alert('用户信息修改成功');
+      // 同步更新本地数据
+      member.name = name;
+      member.email = email;
+      if (password) member.password = password;
+      member.avatar = avatarSrc || null;
+      renderMembers();
+      closeModal();
+    } else {
+      alert(result.msg || '更新失败');
+    }
+  } catch (error) {
+    console.error(error);
+    alert('网络错误');
+  }
+}
+
+// 上传头像预览
+document.getElementById('avatarInput').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const preview = document.getElementById('avatarPreview');
+    preview.src = e.target.result;
+    preview.style.background = 'none';
+  };
+  reader.readAsDataURL(file);
+});
+
+function closeModal() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('editModal').style.display = 'none';
+}
+
+function deleteMember(index) {
+  if (confirm('确定删除此会员吗？')) {
+    members.splice(index, 1);
+    renderMembers();
+  }
+}
+
+function navigate(page) { window.location.href = page; }
+function logout() { localStorage.removeItem('loggedIn'); window.location.href = 'login.html'; }
+
+fetchMembers();
+</script>
+
+
+</body>
+</html>

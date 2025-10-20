@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>后台管理系统</title>
+<style>
+  body { font-family: Arial; margin: 0; padding: 0; background: #f5f5f5; }
+  header { background: #1890ff; color: white; padding: 15px; font-size: 20px; }
+  nav { width: 200px; background: #001529; color: white; min-height: 100vh; float: left; }
+  nav ul { list-style: none; padding: 0; }
+  nav ul li { padding: 15px; cursor: pointer; color: white; }
+  nav ul li:hover, nav ul li.active { background: #1890ff; }
+  main { margin-left: 200px; padding: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  table, th, td { border: 1px solid #ccc; }
+  th, td { padding: 10px; text-align: left; }
+  button { padding: 5px 10px; margin: 2px; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>后台管理系统</header>
+<nav>
+  <ul>
+    <li class="active" onclick="navigate('members.html')">会员管理</li>
+    <li onclick="navigate('events.html')">活动管理</li>
+    <li onclick="logout()">退出登录</li>
+  </ul>
+</nav>
+<main>
+  <h2>欢迎使用后台管理系统</h2>
+  <p>请选择左侧菜单进入会员管理或活动管理。</p>
+</main>
+
+<script>
+// 未登录跳回登录页
+if(localStorage.getItem('loggedIn') !== 'true'){
+  window.location.href = 'login.html';
+}
+
+function navigate(page){
+  window.location.href = page;
+}
+
+function logout(){
+  localStorage.removeItem('loggedIn');
+  window.location.href = 'login.html';
+}
+</script>
+</body>
+</html>

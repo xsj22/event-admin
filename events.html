@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>活动管理</title>
+<style>
+  body { font-family: Arial; margin: 0; padding: 0; background: #f5f5f5; }
+  header { background: #1890ff; color: white; padding: 15px; font-size: 20px; }
+  nav { width: 200px; background: #001529; color: white; min-height: 100vh; float: left; }
+  nav ul { list-style: none; padding: 0; }
+  nav ul li { padding: 15px; cursor: pointer; color: white; }
+  nav ul li:hover, nav ul li.active { background: #1890ff; }
+  main { margin-left: 200px; padding: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  table, th, td { border: 1px solid #ccc; }
+  th, td { padding: 10px; text-align: left; }
+  button { padding: 5px 10px; margin: 2px; cursor: pointer; }
+  input, textarea, select { width: 100%; margin: 5px 0; padding: 5px; }
+  .modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center;
+  }
+  .modal-content {
+    background: white; padding: 20px; width: 400px; border-radius: 8px;
+  }
+</style>
+</head>
+<body>
+<header>后台管理系统 - 活动管理</header>
+<nav>
+  <ul>
+    <li onclick="navigate('dashboard.html')">后台主页</li>
+    <li onclick="navigate('members.html')">会员管理</li>
+    <li class="active">活动管理</li>
+    <li onclick="logout()">退出登录</li>
+  </ul>
+</nav>
+<main>
+  <h2>活动列表</h2>
+  <button onclick="openCreateModal()">创建活动</button>
+  <table id="eventsTable">
+    <thead>
+      <tr><th>活动名</th><th>日期</th><th>地点</th><th>人数</th><th>操作</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</main>
+
+<!-- 创建/编辑活动弹窗 -->
+<div id="eventModal" class="modal">
+  <div class="modal-content">
+    <h3 id="modalTitle">创建活动</h3>
+    <input id="eventName" placeholder="活动名称">
+    <textarea id="eventDescription" placeholder="活动描述"></textarea>
+    <input id="eventDate" type="date">
+    <input id="eventVenue" placeholder="活动地点">
+    <input id="maxParticipants" type="number" placeholder="人数上限">
+    <select id="genderRequirements">
+      <option value="不限">不限</option>
+      <option value="男">男</option>
+      <option value="女">女</option>
+    </select>
+    <input id="eventPhoto" type="file" accept="image/*">
+    <button onclick="submitEvent()">保存</button>
+    <button onclick="closeModal()">取消</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'http://47.113.100.224:5000/api/create-event';
+
+if (localStorage.getItem('loggedIn') !== 'true') {
+  window.location.href = 'login.html';
+}
+
+let events = [];
+let editingEventId = null;
+
+// ========== 加载活动 ==========
+async function fetchEvents() {
+  try {
+    const res = await fetch(`${API_BASE}/events`);
+    const result = await res.json();
+    if (result.code === 200) {
+      events = result.data;
+      renderEvents();
+    } else {
+      alert('加载活动失败: ' + (result.msg || '未知错误'));
+    }
+  } catch (error) {
+    console.error('❌ 网络错误:', error);
+    alert('网络错误，请检查服务器连接');
+  }
+}
+
+// ========== 渲染表格 ==========
+function renderEvents() {
+  const tbody = document.querySelector('#eventsTable tbody');
+  tbody.innerHTML = '';
+  events.forEach(e => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${e.event_name}</td>
+      <td>${e.event_date}</td>
+      <td>${e.event_venue}</td>
+      <td>${e.max_participants}</td>
+      <td>
+        <button onclick="showDetail('${e.event_id}')">详情</button>
+        <button onclick="openEditModal('${e.event_id}')">编辑</button>
+        <button onclick="deleteEvent('${e.event_id}')">删除</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ========== 查看详情 ==========
+function showDetail(eventId) {
+  const e = events.find(ev => ev.event_id === eventId);
+  if (!e) return alert('未找到该活动');
+  const detailHtml = `
+    <div style="padding:20px;">
+      <h3>${e.event_name}</h3>
+      <p><b>时间：</b>${e.event_date}</p>
+      <p><b>地点：</b>${e.event_venue}</p>
+      <p><b>人数上限：</b>${e.max_participants}</p>
+      <p><b>性别要求：</b>${e.gender_requirements}</p>
+      <p><b>活动描述：</b>${e.event_description}</p>
+ </div>
+  `;
+  const w = window.open('', '_blank', 'width=600,height=700');
+  w.document.write(detailHtml);
+}
+
+// ========== 打开创建弹窗 ==========
+function openCreateModal() {
+  editingEventId = null;
+  document.getElementById('modalTitle').innerText = '创建活动';
+  document.querySelectorAll('#eventModal input, #eventModal textarea').forEach(i => i.value = '');
+  document.getElementById('eventModal').style.display = 'flex';
+}
+
+// ========== 打开编辑弹窗 ==========
+function openEditModal(eventId) {
+  const e = events.find(ev => ev.event_id === eventId);
+  if (!e) return alert('未找到该活动');
+  editingEventId = eventId;
+  document.getElementById('modalTitle').innerText = '编辑活动';
+  document.getElementById('eventName').value = e.event_name;
+  document.getElementById('eventDescription').value = e.event_description;
+  document.getElementById('eventDate').value = e.event_date;
+  document.getElementById('eventVenue').value = e.event_venue;
+  document.getElementById('maxParticipants').value = e.max_participants;
+  document.getElementById('genderRequirements').value = e.gender_requirements;
+  document.getElementById('eventModal').style.display = 'flex';
+}
+
+// ========== 关闭弹窗 ==========
+function closeModal() {
+  document.getElementById('eventModal').style.display = 'none';
+}
+
+// ========== 创建/编辑 提交 ==========
+async function submitEvent() {
+  const name = document.getElementById('eventName').value;
+  const desc = document.getElementById('eventDescription').value;
+  const date = document.getElementById('eventDate').value;
+  const venue = document.getElementById('eventVenue').value;
+  const max = document.getElementById('maxParticipants').value;
+  const gender = document.getElementById('genderRequirements').value;
+  const fileInput = document.getElementById('eventPhoto');
+  const userId = localStorage.getItem('userId') || 'admin001'; // 示例
+
+  let base64Image = null;
+  if (fileInput.files[0]) {
+    base64Image = await toBase64(fileInput.files[0]);
+  }
+
+  const data = {
+    eventName: name,
+    eventDescription: desc,
+    eventDate: date,
+    eventVenue: venue,
+    maxParticipants: max,
+    genderRequirements: gender,
+    userId: userId,
+  };
+  if (base64Image) data.eventPhoto = base64Image;
+
+  try {
+    let url, method;
+    if (editingEventId) {
+      url = `${API_BASE}/edit/${editingEventId}`;
+      method = 'PUT';
+    } else {
+      url = `${API_BASE}/submit`;
+      method = 'POST';
+    }
+
+    const res = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+
+    if (result.code === 200) {
+      alert('操作成功！');
+      closeModal();
+      fetchEvents();
+    } else {
+      alert('失败：' + result.message);
+    }
+  } catch (err) {
+    console.error('❌ 提交失败', err);
+    alert('网络错误');
+  }
+}
+
+// ========== 删除活动 ==========
+async function deleteEvent(eventId) {
+  if (!confirm('确定删除该活动吗？')) return;
+  try {
+    const res = await fetch(`${API_BASE}/edit/${eventId}`, { method: 'DELETE' });
+    const result = await res.json();
+    if (result.code === 200) {
+      alert('删除成功！');
+      fetchEvents();
+    } else {
+      alert('删除失败：' + result.message);
+    }
+  } catch (err) {
+    console.error('删除失败', err);
+    alert('网络错误');
+  }
+}
+
+// ========== 工具函数：图片转base64 ==========
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+  });
+}
+
+function navigate(page) { window.location.href = page; }
+function logout() { localStorage.removeItem('loggedIn'); window.location.href='login.html'; }
+
+fetchEvents();
+</script>
+</body>
+</html>
