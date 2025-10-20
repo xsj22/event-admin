@@ -67,7 +67,8 @@
 </div>
 
 <script>
-const API_BASE = 'http://47.113.100.224:5000/api/create-event';
+const API_BASE = 'https://cors-anywhere.herokuapp.com/http://47.113.100.224:5000/api/create-event';
+
 
 if (localStorage.getItem('loggedIn') !== 'true') {
   window.location.href = 'login.html';
